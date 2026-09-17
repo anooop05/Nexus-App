@@ -7,8 +7,14 @@ NEXUS is an end-to-end, full-stack AI career intelligence system built for the *
 Job and internship opportunities live across messy, paginated, and unstructured web pages without clean APIs. NEXUS crawls these heterogeneous sources, extracts and validates structured job schemas via Google Gemini, indexes semantic vector embeddings with PostgreSQL & `pgvector`, matches candidates against uploaded resumes with cosine similarity and LLM justifications, offers an autonomous tool-calling chat agent, and renders weekly video briefings via HeyGen.
 
 ---
-
+### 🚧 Unfinished & Roadmap Features
+- [ ] **Automated Cron Daemon**: Background worker (e.g., node-cron or BullMQ) to re-scrape specified source URLs every 24 hours automatically.
+- [ ] **Listing Change Detection**: Diffing saved listings on subsequent scrapes to flag when a job is edited or closed.
+- [ ] **Live Token & Rupee Cost Dashboard**: Tracking token counts per Gemini request and computing cumulative rupee expenditures.
+- [ ] **Automated Extraction Evals**: A benchmark evaluation script scoring Gemini structured extractions against a golden dataset of hand-labeled HTML pages.
+- [ ] **Cloud Deployment**: Staging deployments on Railway/Render for backend and Vercel for frontend.
 ## 📑 Table of Contents
+---
 
 - [System Architecture](#-system-architecture)
 - [Tech Stack](#-tech-stack)
@@ -199,100 +205,6 @@ NEXUS enforces a multi-tiered deduplication strategy:
 
 ---
 
-## ⚙ Setup & Installation Guide
-
-### Prerequisites
-- **Node.js**: v18.x or v20.x or higher
-- **PostgreSQL**: v14+ with the `pgvector` extension installed
-- **Git**
-
----
-
-## 🔑 Environment Variables
-
-Create a `.env` file inside the `nexus-backend/` directory based on `.env.example`:
-
-```env
-# Google Gemini API Key (Gemini 3.8 / 2.5 Flash and Gemini Embedding 2)
-GEMINI_API_KEY=your_gemini_api_key_here
-
-# HeyGen API Key for AI Avatar Video Briefing Generation
-HEYGEN_API_KEY=your_heygen_api_key_here
-
-# Backend Server Port
-PORT=3000
-
-# Secret Key for JWT Authentication tokens
-JWT_SECRET=your_jwt_secret_key_here
-
-# PostgreSQL Database Connection URL (with pgvector extension)
-DATABASE_URL="postgresql://postgres:password@localhost:5432/nexus?schema=public"
-```
-
----
-
-## 🗄 Database Setup & Migrations
-
-1. **Enable pgvector in PostgreSQL**:
-   Open `psql` or pgAdmin on your PostgreSQL instance and run:
-   ```sql
-   CREATE DATABASE nexus;
-   \c nexus
-   CREATE EXTENSION IF NOT EXISTS vector;
-   ```
-
-2. **Run Prisma Migrations**:
-   In `nexus-backend`:
-   ```bash
-   cd nexus-backend
-   npx prisma db push
-   # or
-   npx prisma migrate dev --name init
-   ```
-
-3. **Verify Prisma Schema**:
-   ```bash
-   npx prisma generate
-   ```
-
----
-
-## 🚀 Running the Project
-
-You can run both the frontend and backend together using the workspace scripts:
-
-### Method 1: Root Workspace Script (Recommended)
-From the root repository directory:
-```bash
-# Install all dependencies across backend and frontend
-npm run install:all
-
-# Launch both servers concurrently
-npm run dev
-```
-
-On Windows, you can also double-click `start-dev.bat`.
-
-### Method 2: Running Individually
-
-**Backend**:
-```bash
-cd nexus-backend
-npm install
-npm run dev
-# Backend runs on http://localhost:3000
-```
-
-**Frontend**:
-```bash
-cd nexus-frontend
-npm install
-npm run dev
-# Frontend runs on http://localhost:5173
-```
-
----
-
 ## 📋 Status: What is Finished vs. Unfinished
 
 ### ✅ Finished & Fully Implemented
@@ -305,24 +217,6 @@ npm run dev
 - [x] **Video Briefing Pipeline**: 60–90 second script synthesis, HeyGen API integration, async lifecycle states, and audio/script fallback.
 - [x] **Multi-Tenant Authentication**: JWT authentication with password hashing and user-isolated shortlists.
 - [x] **Light-Themed Frontend**: Crisp, responsive UI with real-time feedback, toasts, modals, and tabbed workflow.
-
-### 🚧 Unfinished & Roadmap Features
-- [ ] **Automated Cron Daemon**: Background worker (e.g., node-cron or BullMQ) to re-scrape specified source URLs every 24 hours automatically.
-- [ ] **Listing Change Detection**: Diffing saved listings on subsequent scrapes to flag when a job is edited or closed.
-- [ ] **Live Token & Rupee Cost Dashboard**: Tracking token counts per Gemini request and computing cumulative rupee expenditures.
-- [ ] **Automated Extraction Evals**: A benchmark evaluation script scoring Gemini structured extractions against a golden dataset of hand-labeled HTML pages.
-- [ ] **Cloud Deployment**: Staging deployments on Railway/Render for backend and Vercel for frontend.
-
----
-
-## 🎥 Screen Recording Guide
-
-For the **2–4 minute video submission**, demonstrate the following flow:
-1. **Overview & Authentication** (0:00 – 0:30): Show the light-themed UI, register/log in to create a private session.
-2. **Live Scraping & Extraction** (0:30 – 1:15): Input a job board URL, run the live scraper, and showcase the parsed listings structured by Gemini.
-3. **Resume Upload & Semantic Matching** (1:15 – 2:00): Upload a sample PDF resume, trigger semantic match, and highlight cosine scores and LLM justifications.
-4. **Agent Chat with Tool Calling** (2:00 – 2:45): Ask questions like *"Which of my saved roles close this week?"* or *"What skills appear most often?"* and show tool calling in action.
-5. **Video Briefing & Shortlist** (2:45 – 3:30): Click *"Generate My Briefing"*, show script synthesis, async queueing, and avatar video playback.
 
 ---
 
