@@ -7,8 +7,14 @@ NEXUS is an end-to-end, full-stack AI career intelligence system built for the *
 Job and internship opportunities live across messy, paginated, and unstructured web pages without clean APIs. NEXUS crawls these heterogeneous sources, extracts and validates structured job schemas via Google Gemini, indexes semantic vector embeddings with PostgreSQL & `pgvector`, matches candidates against uploaded resumes with cosine similarity and LLM justifications, offers an autonomous tool-calling chat agent, and renders weekly video briefings via HeyGen.
 
 ---
-
+### 🚧 Unfinished & Roadmap Features
+- [ ] **Automated Cron Daemon**: Background worker (e.g., node-cron or BullMQ) to re-scrape specified source URLs every 24 hours automatically.
+- [ ] **Listing Change Detection**: Diffing saved listings on subsequent scrapes to flag when a job is edited or closed.
+- [ ] **Live Token & Rupee Cost Dashboard**: Tracking token counts per Gemini request and computing cumulative rupee expenditures.
+- [ ] **Automated Extraction Evals**: A benchmark evaluation script scoring Gemini structured extractions against a golden dataset of hand-labeled HTML pages.
+- [ ] **Cloud Deployment**: Staging deployments on Railway/Render for backend and Vercel for frontend.
 ## 📑 Table of Contents
+---
 
 - [System Architecture](#-system-architecture)
 - [Tech Stack](#-tech-stack)
@@ -118,182 +124,9 @@ flowchart TD
 
 ---
 
-## 🛡 Deduplication Strategy
 
-Preventing duplicate records during recurring scraper runs is critical to preserve database integrity and avoid wasted LLM / embedding API calls.
 
-NEXUS enforces a multi-tiered deduplication strategy:
-
-1. **Normalized Source URLs**:
-   - Relative URLs (`/jobs/123`) are resolved to absolute canonical paths (`https://domain.com/jobs/123`).
-   - Tracking parameters and query strings (e.g., `?utm_source=...`) are stripped before processing.
-2. **Compound Unique Database Constraint**:
-   - In `schema.prisma`, the `Job` model specifies:
-     ```prisma
-     @@unique([company, title, sourceUrl])
-     ```
-   - This prevents identical roles posted at the same organization URL from ever creating duplicate rows.
-3. **Atomic Upsert Logic (`prisma.job.upsert`)**:
-   - Rather than naive `INSERT` statements, `jobService.ts` executes an atomic upsert:
-     - **If Match Found**: Updates `updatedAt`, `deadline`, and requirements without re-generating costly embeddings unless content substantially altered.
-     - **If New Listing**: Inserts the new record, generates a 768-dimensional embedding via `gemini-embedding-2`, and stores the vector using `UPDATE jobs SET embedding = $1::vector WHERE id = $2`.
-4. **LLM Extraction Caching**:
-   - Raw text checksums avoid re-submitting previously processed job text to the Gemini extraction API.
-
----
-
-## 🔍 Pipeline & Feature Breakdown
-
-### 1. Headless Browser Scraper
-- **Multi-Source Ingestion**: Configured to parse diverse structures such as Y Combinator Work at a Startup, GitHub Hiring threads, and aggregator boards.
-- **Politeness & Rate Limiting**: Sets standard Chrome desktop `User-Agent`, delays requests between items (800ms) to respect server load, and handles timeouts gracefully.
-- **Resilient Selectors**: Implements tiered CSS selectors (`li.job_listing`, `tr.job`, `.job-card`, `article`, and heuristic anchor text filters) to adapt to varied site structures.
-
-### 2. LLM Structured Extraction
-- Raw HTML text is passed to `gemini-3.8-flash` with strict schema enforcement via `@google/genai`:
-  ```json
-  {
-    "title": "Senior Backend Engineer",
-    "company": "Nexus Technologies",
-    "location": "Bengaluru, India",
-    "remote_ok": true,
-    "stipend": "₹25,00,000 - ₹35,00,000",
-    "required_skills": ["Node.js", "TypeScript", "PostgreSQL", "Docker"],
-    "experience_level": "Senior",
-    "deadline": "2026-10-31"
-  }
-  ```
-- **Error Recovery & Normalization**: If Gemini returns invalid JSON, the parser catches syntax errors, sanitizes code markdown fences, and falls back to conservative defaults without crashing the server.
-
-### 3. Semantic Resume Matching (pgvector)
-- **PDF Upload**: Accepts `.pdf` files via `POST /api/resume/upload` using `multer` and extracts raw text via `pdf-parse`.
-- **True Semantic Search**: Avoids basic keyword matching. For example, a search or resume emphasizing *"distributed systems, Go, Kubernetes"* matches roles requesting *"backend infra"* with high cosine scores.
-- **pgvector Cosine Distance**:
-  ```sql
-  SELECT id, title, company, 1 - (embedding <=> $1::vector) AS cosine_similarity 
-  FROM jobs 
-  WHERE embedding IS NOT NULL 
-  ORDER BY embedding <=> $1::vector ASC 
-  LIMIT 10;
-  ```
-- **LLM Justifications**: Generates a one-line explanation highlighting specific candidate strengths relative to the role's requirements.
-
-### 4. Autonomous Tool-Calling Agent
-- Built using Gemini Function Calling (`@google/genai`). Rather than feeding a massive token dump of the entire database into the context window, the model actively invokes dedicated query tools:
-  1. `getRolesClosingSoon`: Queries the user's shortlisted roles with upcoming deadlines.
-  2. `getTopRequiredSkills`: Aggregates the most frequent required skills across matched roles.
-  3. `getTopMatchesByScore`: Queries shortlisted roles meeting a minimum match score threshold.
-- The agent loop detects `functionCalls`, executes the requested database query, and injects the result back into Gemini for final answer synthesis.
-
-### 5. Video Briefing Lifecycle (HeyGen)
-- **Async Workflow**:
-  1. System extracts the candidate's top 3 weekly matches.
-  2. Gemini drafts a concise, natural 60–90 second script.
-  3. Dispatches job to HeyGen API v3 (`POST https://api.heygen.com/v3/video-agents`).
-  4. Manages the complete lifecycle: `PENDING` → `PROCESSING` → `COMPLETED` / `FAILED`.
-  5. The UI provides a live video player with audio-only / script fallback if external API video credits are exhausted.
-
-### 6. Multi-Tenancy & Security
-- **Authentication**: JWT-based session tokens with `bcrypt` password hashing.
-- **Tenant Isolation**: All personal resources (`resumes`, `shortlists`, `briefings`) are keyed strictly to `userId` extracted from verified JWT headers. User A cannot view or manipulate User B's records by tampering with URL parameters or payload IDs.
-
----
-
-## ⚙ Setup & Installation Guide
-
-### Prerequisites
-- **Node.js**: v18.x or v20.x or higher
-- **PostgreSQL**: v14+ with the `pgvector` extension installed
-- **Git**
-
----
-
-## 🔑 Environment Variables
-
-Create a `.env` file inside the `nexus-backend/` directory based on `.env.example`:
-
-```env
-# Google Gemini API Key (Gemini 3.8 / 2.5 Flash and Gemini Embedding 2)
-GEMINI_API_KEY=your_gemini_api_key_here
-
-# HeyGen API Key for AI Avatar Video Briefing Generation
-HEYGEN_API_KEY=your_heygen_api_key_here
-
-# Backend Server Port
-PORT=3000
-
-# Secret Key for JWT Authentication tokens
-JWT_SECRET=your_jwt_secret_key_here
-
-# PostgreSQL Database Connection URL (with pgvector extension)
-DATABASE_URL="postgresql://postgres:password@localhost:5432/nexus?schema=public"
-```
-
----
-
-## 🗄 Database Setup & Migrations
-
-1. **Enable pgvector in PostgreSQL**:
-   Open `psql` or pgAdmin on your PostgreSQL instance and run:
-   ```sql
-   CREATE DATABASE nexus;
-   \c nexus
-   CREATE EXTENSION IF NOT EXISTS vector;
-   ```
-
-2. **Run Prisma Migrations**:
-   In `nexus-backend`:
-   ```bash
-   cd nexus-backend
-   npx prisma db push
-   # or
-   npx prisma migrate dev --name init
-   ```
-
-3. **Verify Prisma Schema**:
-   ```bash
-   npx prisma generate
-   ```
-
----
-
-## 🚀 Running the Project
-
-You can run both the frontend and backend together using the workspace scripts:
-
-### Method 1: Root Workspace Script (Recommended)
-From the root repository directory:
-```bash
-# Install all dependencies across backend and frontend
-npm run install:all
-
-# Launch both servers concurrently
-npm run dev
-```
-
-On Windows, you can also double-click `start-dev.bat`.
-
-### Method 2: Running Individually
-
-**Backend**:
-```bash
-cd nexus-backend
-npm install
-npm run dev
-# Backend runs on http://localhost:3000
-```
-
-**Frontend**:
-```bash
-cd nexus-frontend
-npm install
-npm run dev
-# Frontend runs on http://localhost:5173
-```
-
----
-
-## 📋 Status: What is Finished vs. Unfinished
+## 📋 Status: What is Finished
 
 ### ✅ Finished & Fully Implemented
 - [x] **Headless Browser Scraper**: Puppeteer integration scraping real pages, parsing links, and collecting text.
@@ -305,24 +138,6 @@ npm run dev
 - [x] **Video Briefing Pipeline**: 60–90 second script synthesis, HeyGen API integration, async lifecycle states, and audio/script fallback.
 - [x] **Multi-Tenant Authentication**: JWT authentication with password hashing and user-isolated shortlists.
 - [x] **Light-Themed Frontend**: Crisp, responsive UI with real-time feedback, toasts, modals, and tabbed workflow.
-
-### 🚧 Unfinished & Roadmap Features
-- [ ] **Automated Cron Daemon**: Background worker (e.g., node-cron or BullMQ) to re-scrape specified source URLs every 24 hours automatically.
-- [ ] **Listing Change Detection**: Diffing saved listings on subsequent scrapes to flag when a job is edited or closed.
-- [ ] **Live Token & Rupee Cost Dashboard**: Tracking token counts per Gemini request and computing cumulative rupee expenditures.
-- [ ] **Automated Extraction Evals**: A benchmark evaluation script scoring Gemini structured extractions against a golden dataset of hand-labeled HTML pages.
-- [ ] **Cloud Deployment**: Staging deployments on Railway/Render for backend and Vercel for frontend.
-
----
-
-## 🎥 Screen Recording Guide
-
-For the **2–4 minute video submission**, demonstrate the following flow:
-1. **Overview & Authentication** (0:00 – 0:30): Show the light-themed UI, register/log in to create a private session.
-2. **Live Scraping & Extraction** (0:30 – 1:15): Input a job board URL, run the live scraper, and showcase the parsed listings structured by Gemini.
-3. **Resume Upload & Semantic Matching** (1:15 – 2:00): Upload a sample PDF resume, trigger semantic match, and highlight cosine scores and LLM justifications.
-4. **Agent Chat with Tool Calling** (2:00 – 2:45): Ask questions like *"Which of my saved roles close this week?"* or *"What skills appear most often?"* and show tool calling in action.
-5. **Video Briefing & Shortlist** (2:45 – 3:30): Click *"Generate My Briefing"*, show script synthesis, async queueing, and avatar video playback.
 
 ---
 
