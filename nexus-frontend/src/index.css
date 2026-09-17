@@ -1,0 +1,15 @@
+/* Global Navbar and interactive cursor styles */
+header button,
+header a,
+header nav button,
+header nav a,
+header [role="button"],
+header .cursor-pointer,
+header button:hover,
+header a:hover,
+header nav button:hover,
+header nav a:hover,
+header [role="button"]:hover,
+header .cursor-pointer:hover {
+  cursor: pointer !important;
+}

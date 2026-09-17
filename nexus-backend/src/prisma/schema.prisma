@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Job {
+  id              String                 @id @default(uuid())
+  title           String
+  company         String
+  location        String
+  remoteOk        Boolean                @default(false)
+  stipend         String?
+  requiredSkills  String[]
+  experienceLevel String
+  deadline        String?
+  sourceUrl       String
+  scrapedAt       DateTime               @default(now())
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  embedding       Unsupported("vector")?
+  Shortlist       Shortlist[]
+
+  @@unique([company, title, sourceUrl])
+  @@map("jobs")
+}
+
+model User {
+  id         String      @id @default(uuid())
+  email      String      @unique
+  password   String
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  briefings  Briefing[]
+  resumes    Resume[]
+  shortlists Shortlist[]
+
+  @@map("users")
+}
+
+model Resume {
+  id        String                 @id @default(uuid())
+  userId    String
+  rawText   String
+  embedding Unsupported("vector")?
+  createdAt DateTime               @default(now())
+  user      User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("resumes")
+}
+
+model Shortlist {
+  id            String   @id @default(uuid())
+  userId        String
+  jobId         String
+  matchScore    Float
+  justification String
+  createdAt     DateTime @default(now())
+  job           Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobId])
+  @@map("shortlists")
+}
+
+model Briefing {
+  id        String   @id @default(uuid())
+  userId    String
+  videoUrl  String?
+  script    String
+  status    String   @default("PENDING")
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("briefings")
+}
